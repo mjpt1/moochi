@@ -26,7 +26,7 @@
 """
 import sys as _s, os as _o
 _s.path.insert(0, _o.path.dirname(_o.path.abspath(__file__)))
-from names import fill, out_path, PERSONAL
+from names import fill, out_path, PERSONAL, NAMES
 import argparse, array, ast, asyncio, math, os, re, shutil, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -215,11 +215,15 @@ def main():
         install_girl_voices(esp)
 
     clips = {}
+    named = []
     tmp = tempfile.mkdtemp()
     for key in keys:
         if key in SKIP:
             continue
-        text = fill(SPEAK.get(key, phrases[key].replace("|", " ")))
+        raw = SPEAK.get(key, phrases[key].replace("|", " "))
+        if "{OWNER}" in raw or "{FRIEND}" in raw:
+            named.append(key)
+        text = fill(raw)
         own = next((os.path.join(OWN, key + e) for e in (".wav", ".mp3", ".flac")
                     if os.path.exists(os.path.join(OWN, key + e))), None)
         cache = os.path.join(CACHE, key + ".raw")
@@ -263,7 +267,11 @@ def main():
         f.write("\nstatic const VoiceClip VOICES[P_COUNT] = {\n")
         for k in keys:
             f.write(f"  {{v_{k}, {len(clips[k])}}},\n" if k in clips else "  {nullptr, 0},\n")
-        f.write("};\n")
+        f.write("};\n\n")
+        f.write("// جمله‌هایی که صدایشان اسم دارد (اگر اسم عوض شود ، این صداها پخش نمی‌شوند)\n")
+        f.write(f'#define VOICE_OWNER "{NAMES["owner"]}"\n#define VOICE_FRIEND "{NAMES["friend"]}"\n')
+        f.write("static const uint8_t VOICE_NAMED[] = {" + ",".join("P_" + k for k in named if k in clips) + "};\n")
+        f.write("#define VOICE_NAMED_N (sizeof(VOICE_NAMED))\n")
     print(f"ok -> {os.path.normpath(OUT)}  ({len(clips)} جمله ، {total / RATE:.0f} ثانیه ، {total // 2048} کیلوبایت)")
 
 

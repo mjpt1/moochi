@@ -74,6 +74,7 @@ The heart LED changes colour and beat with each mood.
 | `/music` or `/music 3` | Plays a song from the music box |
 | `/remind 21:30 text` | Daily reminder; `/reminders` lists them, `/clear` removes them |
 | `/meet 2026-12-20` | Countdown to the next meeting on the clock screen |
+| `/names Nila Arash` | Change the names |
 | `DOODLE:...` | A drawing — make one with [`tools/doodle.html`](tools/doodle.html) and paste the text |
 
 Telegram is blocked in Iran; Bale works there. ntfy.sh is also supported (`NTFY_ON` in `config.h`).
@@ -82,7 +83,11 @@ Telegram is blocked in Iran; Bale works there. ntfy.sh is also supported (`NTFY_
 
 The robot speaks to its owner by name and mentions a friend (the person who sends messages). The repository ships with the example names «نیلا» (Nila) and «آرش» (Arash).
 
-- On-screen text in the firmware and the bot: `OWNER_NAME` and `FRIEND_NAME` in `src/secrets.h`.
+**Change them any time without re-uploading:** in the web settings page (card «اسم‌ها»), from the bot with `/names <owner> <friend>`, or over serial with `names <owner> <friend>`. Sentences that contain a name are redrawn on the device right away. Their voice clips are muted until you regenerate the voice with the new names (below), since a recorded clip cannot change a word.
+
+Defaults for a fresh board:
+
+- `OWNER_NAME` and `FRIEND_NAME` in `src/secrets.h` (used until you set names from the web page).
 - Pre-drawn sentences and the voice: copy `tools/names.example.json` to `tools/names.json`, put your names in it and run `python tools/make_text.py` and `python tools/make_voice.py`. With `names.json` present the tools write `src/moochi_text_personal.h` and `src/moochi_voice_personal.h`, which the firmware uses automatically and which are git-ignored, so your names never end up on GitHub.
 
 ## Voice

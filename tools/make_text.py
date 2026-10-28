@@ -18,7 +18,7 @@
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from names import fill, out_path
+from names import fill, out_path, NAMES
 from PIL import Image, ImageDraw, ImageFont, features
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -271,7 +271,19 @@ def main():
         f.write("\n".join(lines_code) + "\n\n")
         f.write("static const Phrase PHRASES[] = {\n" + "\n".join(phrase_code) + "\n};\n\n")
         f.write("\n".join(groups) + "\n\n")
-        f.write("\n".join(dig_code) + "\n")
+        f.write("\n".join(dig_code) + "\n\n")
+        # جمله‌هایی که اسم دارند — اگر اسم از صفحه‌ی وب عوض شود ، روی خود برد از نو نوشته می‌شوند
+        # Phrases containing names — redrawn on the device when the names are changed from the web page
+        f.write(f'#define TEXT_OWNER "{NAMES["owner"]}"\n#define TEXT_FRIEND "{NAMES["friend"]}"\n')
+        f.write("struct NamedTpl { uint8_t id; uint8_t big; const char *tpl; };\n")
+        f.write("static const NamedTpl NAMED[] = {\n")
+        nn = 0
+        for k in names:
+            t = PHRASES[k]
+            if "{OWNER}" in t or "{FRIEND}" in t:
+                t = t.replace("{OWNER}", "{O}").replace("{FRIEND}", "{F}")
+                f.write(f'  {{P_{k}, {1 if k in BIG else 0}, "{t}"}},\n'); nn += 1
+        f.write(f"}};\n#define NAMED_N {nn}\n")
     print("ok ->", os.path.normpath(OUT), f"({len(names)} جمله، raqm={HAVE_RAQM})")
 
 

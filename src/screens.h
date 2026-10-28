@@ -6,7 +6,7 @@
 
 static void drawTxtRight(const TxtLine &t, int xr, int y) { drawTxt(t, xr - t.w, y); }
 static void drawTxtCenter(const TxtLine &t, int y) { drawTxt(t, (128 - t.w) / 2, y); }
-static const TxtLine &line0(PhraseId p) { return PHRASES[p].lines[0]; }
+static const TxtLine &line0(PhraseId p) { return PH(p).lines[0]; }
 
 // عدد با رقم‌های ریز فارسی ؛ خروجی = عرض
 static int smallNumWidth(int v) {

@@ -66,6 +66,7 @@ struct Settings {
   int32_t meet = 0;                          // تاریخ دیدار yyyymmdd (میلادی)
   char rem[400] = "";                        // یادآورها: هر خط «08:30 متن»
   uint8_t moodDay = 0; char lastMood[40] = "";
+  char oname[40] = OWNER_NAME, fname[40] = FRIEND_NAME;   // اسم صاحب و دوست (از صفحه‌ی وب عوض می‌شود)
 } S;
 static uint8_t doodle[16 * 48];              // نقاشی ۱۲۸×۴۸
 
@@ -92,6 +93,8 @@ static void loadSettings() {
   prefs.getString("rem", S.rem, sizeof S.rem);
   S.moodDay = prefs.getUChar("moodDay", 0); prefs.getString("lastMood", S.lastMood, sizeof S.lastMood);
   prefs.getBytes("doodle", doodle, sizeof doodle);
+  if (!prefs.getString("oname", S.oname, sizeof S.oname)) strlcpy(S.oname, OWNER_NAME, sizeof S.oname);
+  if (!prefs.getString("fname", S.fname, sizeof S.fname)) strlcpy(S.fname, FRIEND_NAME, sizeof S.fname);
   prefs.end();
 }
 static void saveU8(const char *k, uint8_t v) { prefs.begin("moochi", false); prefs.putUChar(k, v); prefs.end(); }
@@ -104,6 +107,7 @@ static void saveAll() {
   prefs.putString("ssid", S.ssid); prefs.putString("pass", S.pass);
   prefs.putString("botTok", S.botTok); prefs.putUChar("botApi", S.botApi);
   prefs.putInt("meet", S.meet); prefs.putString("rem", S.rem);
+  prefs.putString("oname", S.oname); prefs.putString("fname", S.fname);
   prefs.end();
 }
 
@@ -210,7 +214,13 @@ static void ARDUINO_ISR_ATTR vIsr() {
   vHalf = true;
   vPos = i + 1;
 }
-static bool hasVoice(PhraseId p) { return VOICE_ON && SOUND_ON && p < P_COUNT && VOICES[p].n > 0; }
+// اگر اسم‌ها با اسم‌های داخل صدا فرق کنند ، جمله‌هایی که اسم دارند بی‌صدا می‌شوند
+static bool voiceMuted(PhraseId p) {
+  if (!strcmp(S.oname, VOICE_OWNER) && !strcmp(S.fname, VOICE_FRIEND)) return false;
+  for (size_t i = 0; i < VOICE_NAMED_N; i++) if (VOICE_NAMED[i] == p) return true;
+  return false;
+}
+static bool hasVoice(PhraseId p) { return VOICE_ON && SOUND_ON && p < P_COUNT && VOICES[p].n > 0 && !voiceMuted(p); }
 static uint32_t voiceMs(PhraseId p) { return hasVoice(p) ? VOICES[p].n * 1000UL / VOICE_RATE : 0; }
 static void voiceStop() {
   vPending = P_COUNT;
@@ -480,7 +490,7 @@ static void wifiStart() {
 }
 // ---------------- بات بله / تلگرام ----------------
 static volatile int64_t inChat = 0;          // پیام از کدام چت آمده (۰ = صفحه‌ي وب/ntfy)
-struct BotOut { int64_t chat; char text[720]; };
+struct BotOut { int64_t chat; char text[800]; };
 static BotOut botOut[4]; static volatile uint8_t botHead = 0, botTail = 0;
 static int64_t botOffset = 0; static uint8_t botFail = 0;
 static void botQueue(int64_t chat, const char *t) {
@@ -735,6 +745,73 @@ static void loveAdd(int d) {
   int v = (int)S.love + d; S.love = v < 0 ? 0 : (v > 100 ? 100 : v); loveDirty = true;
 }
 
+// ---------------- اسم‌ها (از صفحه‌ی وب یا بات عوض می‌شوند) ----------------
+// جمله‌های آماده‌ای که اسم دارند (جدول NAMED در moochi_text*.h) اگر اسم با اسم داخل تصویرها فرق کند
+// روی خود برد با فونت فارسی از نو نوشته می‌شوند و در RAM نگه داشته می‌شوند.
+static TxtLine namedLines[NAMED_N][2]; static Phrase namedPh[NAMED_N];
+static volatile bool namesDirty = false;
+static void nameSubst(char *out, size_t n, const char *tpl) {
+  size_t k = 0;
+  for (const char *p = tpl; *p && k + 1 < n; ) {
+    if (p[0] == '{' && (p[1] == 'O' || p[1] == 'F') && p[2] == '}') {
+      for (const char *q = (p[1] == 'O') ? S.oname : S.fname; *q && k + 1 < n; ) out[k++] = *q++;
+      p += 3;
+    } else out[k++] = *p++;
+  }
+  out[k] = 0;
+}
+static bool renderNamedLine(const char *txt, bool big, TxtLine &L) {
+  static uint16_t raw[PT_MAX], g[PT_MAX];
+  int n = ptShape(raw, ptDecode(txt, raw, PT_MAX), g);
+  oled.clearBuffer();
+  ptDrawLine(g, 0, n, 127, 0);
+  const uint8_t *buf = oled.getBufferPtr();
+  int x0 = 128, x1 = -1, y0 = 64, y1 = -1;
+  for (int y = 0; y < PF_HEIGHT + 2 && y < 64; y++)
+    for (int x = 0; x < 128; x++)
+      if ((buf[(y / 8) * 128 + x] >> (y % 8)) & 1) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 < 0) return false;
+  int sc = (big && (x1 - x0 + 1) * 2 <= 120) ? 2 : 1;
+  int w = (x1 - x0 + 1) * sc, h = (y1 - y0 + 1) * sc, bw = (w + 7) / 8;
+  uint8_t *bits = (uint8_t *)calloc(bw * h, 1);
+  if (!bits) return false;
+  for (int y = y0; y <= y1; y++)
+    for (int x = x0; x <= x1; x++)
+      if ((buf[(y / 8) * 128 + x] >> (y % 8)) & 1)
+        for (int dy = 0; dy < sc; dy++) for (int dx = 0; dx < sc; dx++) {
+          int xx = (x - x0) * sc + dx, yy = (y - y0) * sc + dy;
+          bits[yy * bw + (xx >> 3)] |= 1 << (xx & 7);
+        }
+  L.w = w; L.h = h; L.bits = bits;
+  return true;
+}
+static void rebuildNamed() {
+  for (int i = 0; i < NAMED_N; i++) {
+    phOverride[NAMED[i].id] = nullptr;
+    for (int j = 0; j < 2; j++) { free((void *)namedLines[i][j].bits); namedLines[i][j].bits = nullptr; }
+  }
+  if (!strcmp(S.oname, TEXT_OWNER) && !strcmp(S.fname, TEXT_FRIEND)) return;   // همان تصویرهای آماده
+  char t[160];
+  for (int i = 0; i < NAMED_N; i++) {
+    nameSubst(t, sizeof t, NAMED[i].tpl);
+    char *bar = strchr(t, '|'); int cnt = 0;
+    if (bar) *bar = 0;
+    if (renderNamedLine(t, NAMED[i].big, namedLines[i][cnt])) cnt++;
+    if (bar && renderNamedLine(bar + 1, NAMED[i].big, namedLines[i][cnt])) cnt++;
+    if (!cnt) continue;
+    namedPh[i].n = cnt; namedPh[i].lines = namedLines[i];
+    phOverride[NAMED[i].id] = &namedPh[i];
+  }
+  oled.clearBuffer();
+  Serial.printf("[names] %s / %s (redrawn on device)\n", S.oname, S.fname);
+}
+static void setNames(const char *o, const char *f) {
+  if (o && *o) strlcpy(S.oname, o, sizeof S.oname);
+  if (f && *f) strlcpy(S.fname, f, sizeof S.fname);
+  prefs.begin("moochi", false); prefs.putString("oname", S.oname); prefs.putString("fname", S.fname); prefs.end();
+  namesDirty = true;
+}
+
 // ---------------- روزهای خاص ----------------
 static PhraseId specialToday() {
   int jy, jm, jd; jalaliToday(jy, jm, jd);
@@ -770,7 +847,7 @@ static void markRead(bool byOwner = true) {
   Serial.println("[msg] mark read");
   S.unread = false;
   prefs.begin("moochi", false); prefs.putBool("unread", false); prefs.end();
-  if (byOwner) { notifyFriend(1, "💌 " OWNER_NAME " پیامت رو دید", 0); loveAdd(5); }
+  if (byOwner) { char nb[96]; snprintf(nb, sizeof nb, "💌 %s پیامت رو دید", S.oname); notifyFriend(1, nb, 0); loveAdd(5); }
 }
 static bool isHeartMsg(const char *t) {
   String s(t); s.trim();
@@ -1011,7 +1088,7 @@ static void appEvent(Ev e) {
         aVal = (aVal + (e == EV_RIGHT_TAP ? 1 : N_REPLIES - 1)) % N_REPLIES; ptPrepare(appT, REPLIES[aVal]); beep(1800, 25);
       }
       if (aState == 0 && e == EV_TOP_TAP) {
-        char b[120]; snprintf(b, sizeof b, "💬 " OWNER_NAME ": %s", REPLIES[aVal]);
+        char b[120]; snprintf(b, sizeof b, "💬 %s: %s", S.oname, REPLIES[aVal]);
         bool ok = S.botTok[0] && S.owner;
         notifyFriend(3, b, 0);
         ptPrepare(appT, ok ? "فرستاده شد ✓" : "بات تنظیم نشده!");
@@ -1061,7 +1138,7 @@ static void appTick(uint32_t now) {
       if (aState == 1 && (int32_t)(now - aT) > 1500) {
         aState = 2; aVal = random(HAFEZ_N); aVal2 = 0; aT2 = now;
         ptPrepare(appT, HAFEZ[aVal]); PLAY(S_CHIME);
-        char b[240]; snprintf(b, sizeof b, "📜 فال " OWNER_NAME ":\n%s", HAFEZ[aVal]); notifyFriend(2, b, 60000);
+        char b[240]; snprintf(b, sizeof b, "📜 فال %s:\n%s", S.oname, HAFEZ[aVal]); notifyFriend(2, b, 60000);
       }
       if (aState == 2) { int pg = (appT.lines + 2) / 3; if (pg > 1 && (int32_t)(now - aT2) > 4500) { aVal2 = (aVal2 + 1) % pg; aT2 = now; } }
       break;
@@ -1231,7 +1308,7 @@ static void handle(Ev e, uint32_t now) {
       if (k < 0) { if (e == EV_TOP_LONG) { setMode(MODE_FACE); askRetryAt = now + 30UL * 60000; } return; }
       S.moodDay = now_dt.d; strlcpy(S.lastMood, FEEL_FA[k], sizeof S.lastMood);
       prefs.begin("moochi", false); prefs.putUChar("moodDay", S.moodDay); prefs.putString("lastMood", S.lastMood); prefs.end();
-      char b[80]; snprintf(b, sizeof b, "🌙 حال " OWNER_NAME " امروز: %s", FEEL_FA[k]); notifyFriend(3, b, 0);
+      char b[120]; snprintf(b, sizeof b, "🌙 حال %s امروز: %s", S.oname, FEEL_FA[k]); notifyFriend(3, b, 0);
       setMode(MODE_FACE); loveAdd(2);
       if (k == 0) { feel(M_SAD, 1800); afterTmp = M_LOVE; afterTmpMs = 3500; say(P_HUG, 3500); PLAY(S_SAD); }
       else if (k == 1) { feel(M_LOVE, 3000); say(pick(G_LOVE, G_LOVE_N), 3000); PLAY(S_LOVE); }
@@ -1286,7 +1363,7 @@ static void handle(Ev e, uint32_t now) {
       setMode(MODE_FACE); angerLevel = 0;
       feel(M_LOVE, 3500); say(random(2) ? P_HUG : pick(G_LOVE, G_LOVE_N), 3000); PLAY(S_LOVE);
       loveAdd(6);
-      notifyFriend(0, "🤗 " OWNER_NAME " موچی رو بغل کرد", 10UL * 60000);
+      { char nb[96]; snprintf(nb, sizeof nb, "🤗 %s موچی رو بغل کرد", S.oname); notifyFriend(0, nb, 10UL * 60000); }
       break;
     case EV_ANNOY:
       setMode(MODE_FACE); feel(M_ANNOYED, 2500); say(pick(G_ANNOY, G_ANNOY_N), 2200); PLAY(S_ANNOY);
@@ -1526,8 +1603,8 @@ static void drawClockScreen(uint32_t now) {
   if (it >= 4) {
     int key = it * 10000 + (it == 4 ? mh * 60 + mm : md);
     if (key != clockTKey) {
-      clockTKey = key; char a[60], b[90];
-      if (it == 4) snprintf(a, sizeof a, "ساعت " FRIEND_NAME " %02d:%02d", mh, mm);
+      clockTKey = key; char a[100], b[140];
+      if (it == 4) snprintf(a, sizeof a, "ساعت %s %02d:%02d", S.fname, mh, mm);
       else if (md == 0) snprintf(a, sizeof a, "امروز روز دیداره ❤");
       else snprintf(a, sizeof a, "%d روز تا دیدار ❤", md);
       faNum(b, sizeof b, a); ptPrepare(clockT, b);
@@ -1732,6 +1809,8 @@ static void webSetup() {
     j += "\",\"meetDays\":"; j += meetDays();
     j += ",\"rem\":\""; j += jsonEsc(S.rem);
     j += "\",\"mood\":\""; j += jsonEsc(S.moodDay == now_dt.d ? S.lastMood : "");
+    j += "\",\"oname\":\""; j += jsonEsc(S.oname);
+    j += "\",\"fname\":\""; j += jsonEsc(S.fname);
     j += "\"}";
     server.send(200, "application/json; charset=utf-8", j);
   });
@@ -1756,6 +1835,7 @@ static void webSetup() {
       int y = 0, mo = 0, d = 0;
       S.meet = (sscanf(server.arg("meet").c_str(), "%d-%d-%d", &y, &mo, &d) == 3) ? y * 10000 + mo * 100 + d : 0;
     }
+    if (server.hasArg("oname")) setNames(server.arg("oname").c_str(), server.arg("fname").c_str());
     if (server.hasArg("rem")) { String r = server.arg("rem"); r.replace("\r", ""); r.trim(); strlcpy(S.rem, r.c_str(), sizeof S.rem); }
     bool reboot = false;
     if (server.hasArg("ssid") && server.arg("ssid").length()) {
@@ -1790,19 +1870,25 @@ static void webSetup() {
   server.onNotFound([] { server.sendHeader("Location", "/"); server.send(302); });
   server.begin();
 }
-static const char BOT_HELP[] =
+static const char BOT_HELP_FMT[] =
   "سلام! من موچی‌ام 🤖❤\n"
-  "هر چی این‌جا بنویسی روی صفحه‌ی من نشون داده می‌شه و برای " OWNER_NAME " می‌خونمش.\n\n"
-  "/status  حال و احوال موچی و " OWNER_NAME "\n"
+  "هر چی این‌جا بنویسی روی صفحه‌ی من نشون داده می‌شه و برای %s می‌خونمش.\n\n"
+  "/status  حال و احوال موچی و %s\n"
   "/love  یه قلب بفرست\n"
-  "/fal  فال حافظ برای " OWNER_NAME "\n"
+  "/fal  فال حافظ برای %s\n"
   "/ask  بپرس امروز حالش چطوره\n"
   "/music  یه آهنگ براش بزن\n"
   "/remind 21:30 قرصت یادت نره\n"
   "/reminders  لیست یادآورها\n"
   "/clear  پاک کردن یادآورها\n"
   "/meet 2026-12-20  روز دیدار\n\n"
+  "/names نیلا آرش  عوض کردن اسم‌ها\n\n"
   "🎨 نقاشی: توی صفحه‌ی «نقاشی برای موچی» بکش و متنی که با DOODLE: شروع می‌شه رو این‌جا بفرست.";
+static const char *botHelp() {
+  static char h[800];
+  snprintf(h, sizeof h, BOT_HELP_FMT, S.oname, S.oname, S.oname);
+  return h;
+}
 static void botHandle(int64_t chat, String t) {
   t.trim();
   char b[700];
@@ -1811,23 +1897,32 @@ static void botHandle(int64_t chat, String t) {
     String code = sp > 0 ? t.substring(sp + 1) : String(""); code.trim();
     if (code == PAIR_CODE) {
       S.owner = chat; prefs.begin("moochi", false); prefs.putLong64("owner", chat); prefs.end();
-      botQueue(chat, "✅ وصل شدیم! از این به بعد پیام‌هات می‌رسه به موچی و خبرهای " OWNER_NAME " میاد این‌جا.");
-      botQueue(chat, BOT_HELP);
+      snprintf(b, sizeof b, "✅ وصل شدیم! از این به بعد پیام‌هات می‌رسه به موچی و خبرهای %s میاد این‌جا.", S.oname); botQueue(chat, b);
+      botQueue(chat, botHelp());
       wakeQuiet(); setMode(MODE_FACE); feel(M_LOVE, 3000); PLAY(S_LOVE);
-    } else if (S.owner == chat) botQueue(chat, BOT_HELP);
+    } else if (S.owner == chat) botQueue(chat, botHelp());
     else botQueue(chat, "سلام! 🤖 من موچی‌ام. برای وصل شدن بنویس:\n/pair کد");
     return;
   }
   if (!S.owner || chat != S.owner) { botQueue(chat, "🙈 من فقط با صاحبم حرف می‌زنم. اول بنویس /pair و کد"); return; }
   lastActive = millis();
-  if (t == "/help") { botQueue(chat, BOT_HELP); return; }
+  if (t == "/help") { botQueue(chat, botHelp()); return; }
+  if (t.startsWith("/names")) {
+    String r = t.substring(6); r.trim(); int sp = r.indexOf(' ');
+    if (r.length() && sp != 0) {
+      String o = sp > 0 ? r.substring(0, sp) : r, f = sp > 0 ? r.substring(sp + 1) : String(S.fname); f.trim();
+      setNames(o.c_str(), f.c_str());
+      snprintf(b, sizeof b, "✅ اسم‌ها: %s و %s", S.oname, S.fname);
+    } else snprintf(b, sizeof b, "اسم‌ها الان: %s و %s\nبرای عوض کردن: /names نیلا آرش", S.oname, S.fname);
+    botQueue(chat, b); return;
+  }
   if (t == "/status") {
     int mh = 0, mm = 0; bool mt = friendTime(mh, mm); int md = meetDays();
     char w[24] = "—"; if (wxTemp > -100) snprintf(w, sizeof w, "%d°", (int)wxTemp);
-    snprintf(b, sizeof b, "🤖 موچی الان: %s\n🕒 ساعت " OWNER_NAME ": %02d:%02d\n🌡 هوا: %s\n❤ عشق‌سنج: %d٪\n⭐ امتیاز محبت: %u\n💌 پیام آخر: %s\n🙂 حال امروز " OWNER_NAME ": %s%s%s",
-      MOOD_FA[curMood(millis())], now_dt.h, now_dt.mi, w, S.love, (unsigned)S.xp,
+    snprintf(b, sizeof b, "🤖 موچی الان: %s\n🕒 ساعت %s: %02d:%02d\n🌡 هوا: %s\n❤ عشق‌سنج: %d٪\n⭐ امتیاز محبت: %u\n💌 پیام آخر: %s\n🙂 حال امروز %s: %s%s%s",
+      MOOD_FA[curMood(millis())], S.oname, now_dt.h, now_dt.mi, w, S.love, (unsigned)S.xp,
       !S.msg[0] ? "—" : (S.unread ? "هنوز ندیده" : "دیده ✓"),
-      S.moodDay == now_dt.d && S.lastMood[0] ? S.lastMood : "هنوز معلوم نیست",
+      S.oname, S.moodDay == now_dt.d && S.lastMood[0] ? S.lastMood : "هنوز معلوم نیست",
       md >= 0 ? "\n✈ روزهای مانده تا دیدار: " : "", md >= 0 ? String(md).c_str() : "");
     (void)mt; (void)mh; (void)mm;
     botQueue(chat, b); return;
@@ -1941,6 +2036,7 @@ static void serialTick() {
     else if (!strcmp(line, "scan")) wifiScanPrint();
     else if (!strcmp(line, "dump")) dumpScreen();
     else if (!strcmp(line, "ask")) startAsk();
+    else if (!strncmp(line, "names ", 6)) { char *sp = strchr(line + 6, ' '); if (sp) *sp++ = 0; setNames(line + 6, sp); }
     else if (!strcmp(line, "fal")) { openApp(A_FAL); aState = 1; aT = millis(); }
     else if (!strncmp(line, "note ", 5)) showNote(line + 5, 0, 60000);
     else if (!strcmp(line, "sneeze")) { setMode(MODE_FACE); feel(M_SURPRISED, 750); afterTmp = M_LAUGH; afterTmpMs = 900; sneezeAt = millis() + 650; PLAY(S_SNEEZE); }
@@ -1978,6 +2074,7 @@ void setup() {
   if (Wire.endTransmission() == 0) oled.setI2CAddress(0x3D * 2);
   oled.begin();
   oled.setBusClock(400000);
+  rebuildNamed();
 
   Wire.beginTransmission(RTC_ADDR);
   rtcOk = (Wire.endTransmission() == 0);
@@ -2033,6 +2130,7 @@ void loop() {
   now = millis();   // مهم: رویدادها/صفحه‌ي وب ممکن است زمان‌ها را «بعد از» now گذاشته باشند
   if (mode != MODE_BOOT && mode != MODE_DIAG && mode != MODE_OTA) { brainTick(now); alarmCheck(now); }
 
+  if (namesDirty) { namesDirty = false; rebuildNamed(); }
   ledTick(now);
   if (now - lastFrame >= 33) { lastFrame = now; render(now); if (dumpAt && now > dumpAt) { dumpAt = 0; dumpScreen(); } }
   delay(1);

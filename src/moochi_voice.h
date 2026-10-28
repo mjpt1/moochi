@@ -11844,3 +11844,9 @@ static const VoiceClip VOICES[P_COUNT] = {
   {nullptr, 0},
   {nullptr, 0},
 };
+
+// جمله‌هایی که صدایشان اسم دارد (اگر اسم عوض شود ، این صداها پخش نمی‌شوند)
+#define VOICE_OWNER "نیلا"
+#define VOICE_FRIEND "آرش"
+static const uint8_t VOICE_NAMED[] = {P_OWNER,P_ANG6,P_LOVE1,P_LOVE3,P_MORNING,P_FROM,P_THINK,P_ALARM,P_MN_REPLY,P_BDAY};
+#define VOICE_NAMED_N (sizeof(VOICE_NAMED))

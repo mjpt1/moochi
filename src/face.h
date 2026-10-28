@@ -6,6 +6,10 @@
 #include <math.h>
 #include "moochi_text_sel.h"
 
+// جمله‌هایی که اسم دارند و اسم از صفحه‌ی وب عوض شده: نسخه‌ی تازه در RAM (main.cpp → rebuildNamed)
+static const Phrase *phOverride[P_COUNT];
+static inline const Phrase &PH(int p) { return phOverride[p] ? *phOverride[p] : PHRASES[p]; }
+
 extern U8G2 &oled;
 
 #ifndef EYE_SIZE
@@ -94,12 +98,12 @@ static void drawTxt(const TxtLine &t, int x, int y) {
   oled.drawXBMP(x, y, t.w, t.h, t.bits);
 }
 static int phraseHeight(PhraseId p) {
-  const Phrase &ph = PHRASES[p]; int h = 0;
+  const Phrase &ph = PH(p); int h = 0;
   for (int i = 0; i < ph.n; i++) h += ph.lines[i].h + (i ? 1 : 0);
   return h;
 }
 static void drawPhraseAt(PhraseId p, int yTop) {          // وسط‌چین
-  const Phrase &ph = PHRASES[p]; int y = yTop;
+  const Phrase &ph = PH(p); int y = yTop;
   for (int i = 0; i < ph.n; i++) {
     const TxtLine &l = ph.lines[i];
     drawTxt(l, (128 - l.w) / 2, y);
@@ -255,8 +259,8 @@ static void drawClockTime(int hh, int mm, int ss, int y = 0, bool bar = true) {
 }
 // تاریخ: از راست به چپ  «شنبه ۱۸ مهر» ؛ y = بالای خط
 static void drawDateLine(int jd, int jm, int wd, int y) {
-  const TxtLine &W = PHRASES[P_WD0 + wd].lines[0];
-  const TxtLine &M = PHRASES[P_M1 + (jm - 1)].lines[0];
+  const TxtLine &W = PH(P_WD0 + wd).lines[0];
+  const TxtLine &M = PH(P_M1 + (jm - 1)).lines[0];
   int dd = jd >= 10 ? 2 : 1;
   int wN = numWidth(DIG_SMALL, jd, dd, 1);
   int gap = 5;

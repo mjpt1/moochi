@@ -477,3 +477,21 @@ static const uint8_t DIG_SMALL7_bits[] PROGMEM = {65,99,99,54,54,54,28,28,28,24}
 static const uint8_t DIG_SMALL8_bits[] PROGMEM = {0,24,28,28,28,54,54,54,99,99};
 static const uint8_t DIG_SMALL9_bits[] PROGMEM = {0,30,31,51,51,63,62,48,48,48};
 static const TxtLine DIG_SMALL[10] = {{5,10,DIG_SMALL0_bits},{3,10,DIG_SMALL1_bits},{7,10,DIG_SMALL2_bits},{9,10,DIG_SMALL3_bits},{8,10,DIG_SMALL4_bits},{8,10,DIG_SMALL5_bits},{7,10,DIG_SMALL6_bits},{7,10,DIG_SMALL7_bits},{7,10,DIG_SMALL8_bits},{6,10,DIG_SMALL9_bits}};
+
+#define TEXT_OWNER "نیلا"
+#define TEXT_FRIEND "آرش"
+struct NamedTpl { uint8_t id; uint8_t big; const char *tpl; };
+static const NamedTpl NAMED[] = {
+  {P_NAME, 1, "{O}"},
+  {P_ANG6, 0, "به {O} میگم‌ها!"},
+  {P_LOVE1, 0, "دوستت دارم {O}"},
+  {P_LOVE3, 0, "{O} جون سلام!"},
+  {P_MORNING, 0, "صبح بخیر {O}!"},
+  {P_FROM, 0, "پیام از {F}"},
+  {P_THINK, 0, "{F} به یادته!"},
+  {P_ALARM, 0, "پاشو {O}!"},
+  {P_MN_REPLY, 0, "جواب به {F}"},
+  {P_BDAY, 0, "تولدت مبارک|{O} جونم!"},
+  {P_TO_BDAY, 0, "روز تا تولد {O}"},
+};
+#define NAMED_N 11

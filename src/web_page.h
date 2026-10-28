@@ -23,7 +23,7 @@ button.g{background:transparent;color:var(--pink);border:1px solid var(--pink)}
 .stat{display:grid;grid-template-columns:auto 1fr;gap:2px 12px}.stat b{font-weight:600}
 #toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:20px;opacity:0;transition:.3s}
 </style></head><body><main>
-<h1>موچی ♥</h1><p class="sub">ربات کوچولوی )HTML" OWNER_NAME R"HTML(</p>
+<h1>موچی ♥</h1><p class="sub">ربات کوچولوی <span class="on"></span></p>
 
 <div class="card"><h2>وضعیت</h2><div class="stat" id="st">...</div></div>
 
@@ -52,8 +52,13 @@ button.g{background:transparent;color:var(--pink);border:1px solid var(--pink)}
 <select id="city"></select><button onclick="saveCity()">ذخیره</button>
 <p class="sub" style="margin:6px 0 0">برای آب‌وهوا و تنظیم خودکار ساعت</p></div>
 
+<div class="card"><h2>اسم‌ها</h2>
+<div class="row"><div><label>اسم صاحب موچی</label><input id="oname" maxlength="30"></div><div><label>اسم دوست (فرستنده‌ی پیام)</label><input id="fname" maxlength="30"></div></div>
+<button onclick="api('/api/set',{oname:v('oname').trim(),fname:v('fname').trim()})">ذخیره</button>
+<p class="sub" style="margin:6px 0 0">جمله‌هایی که اسم دارند روی خود موچی از نو نوشته می‌شوند. صدای آن جمله‌ها تا وقتی با tools/make_voice.py دوباره ساخته نشوند پخش نمی‌شود.</p></div>
+
 <div class="card"><h2>روزهای خاص (شمسی)</h2>
-<div class="row"><div><label>تولد )HTML" OWNER_NAME R"HTML(: ماه</label><input id="bm" type="number" min="0" max="12"></div><div><label>روز</label><input id="bd" type="number" min="0" max="31"></div></div>
+<div class="row"><div><label>تولد <span class="on"></span>: ماه</label><input id="bm" type="number" min="0" max="12"></div><div><label>روز</label><input id="bd" type="number" min="0" max="31"></div></div>
 <div class="row"><div><label>سالگرد ازدواج: ماه</label><input id="am" type="number" min="0" max="12"></div><div><label>روز</label><input id="ad" type="number" min="0" max="31"></div></div>
 <button onclick="api('/api/set',{bm:v('bm'),bd:v('bd'),am:v('am'),ad:v('ad')})">ذخیره</button></div>
 
@@ -63,7 +68,7 @@ button.g{background:transparent;color:var(--pink);border:1px solid var(--pink)}
 <button class="g" onclick="act('app',4)">تایمر</button><button class="g" onclick="act('app',5)">چراغ خواب</button>
 <button class="g" onclick="act('app',6)">عشق‌سنج</button><button class="g" onclick="act('boot')">سلام اول</button>
 <button class="g" onclick="act('fal')">فال حافظ</button><button class="g" onclick="act('music')">آهنگ</button>
-<button class="g" onclick="act('ask')">بپرس حالت چطوره</button><button class="g" onclick="act('app',9)">جواب به )HTML" FRIEND_NAME R"HTML(</button>
+<button class="g" onclick="act('ask')">بپرس حالت چطوره</button><button class="g" onclick="act('app',9)">جواب به <span class="fn"></span></button>
 <label>حالت چهره</label>
 <div class="row"><select id="mood"><option>happy</option><option>love</option><option>angry</option><option>sad</option><option>surprised</option><option>sleep</option><option>dizzy</option><option>wink</option><option>curious</option><option>sulk</option></select>
 <button onclick="act('mood',v('mood'))">نشان بده</button></div></div>
@@ -101,12 +106,13 @@ function saveAlarm(){let m=0;D.forEach((d,i)=>{if($('d'+i).checked)m|=1<<i});con
 function saveCity(){const c=C[v('city')];api('/api/set',{city:v('city'),tz:c[1],lat:c[2],lon:c[3]})}
 let first=true;
 async function load(){try{const s=await (await fetch('/api/status')).json();
-$('st').innerHTML=`<b>ساعت</b><span>${s.time} — ${s.date}</span><b>آب‌وهوا</b><span>${s.temp==null?'—':s.temp+'°'}</span><b>عشق‌سنج</b><span>${s.love}٪ ♥</span><b>پیام خوانده‌نشده</b><span>${s.unread?'دارد 💌':'ندارد'}</span><b>امتیاز محبت</b><span>${s.xp} ⭐</span><b>حال امروز )HTML" OWNER_NAME R"HTML(</b><span>${s.mood||'—'}</span>${s.meetDays>=0?`<b>تا دیدار</b><span>${s.meetDays} روز ✈</span>`:''}<b>وای‌فای</b><span>${s.wifi}</span>`;
+$('st').innerHTML=`<b>ساعت</b><span>${s.time} — ${s.date}</span><b>آب‌وهوا</b><span>${s.temp==null?'—':s.temp+'°'}</span><b>عشق‌سنج</b><span>${s.love}٪ ♥</span><b>پیام خوانده‌نشده</b><span>${s.unread?'دارد 💌':'ندارد'}</span><b>امتیاز محبت</b><span>${s.xp} ⭐</span><b>حال امروز ${s.oname}</b><span>${s.mood||'—'}</span>${s.meetDays>=0?`<b>تا دیدار</b><span>${s.meetDays} روز ✈</span>`:''}<b>وای‌فای</b><span>${s.wifi}</span>`;
 $('last').textContent=s.msg||'—';$('lastst').textContent=s.msg?(s.unread?'هنوز خوانده نشده 💌':'خوانده شده ✓'):'';
 $('pairc').textContent='/pair '+s.pair;
+document.querySelectorAll('.on').forEach(e=>e.textContent=s.oname);document.querySelectorAll('.fn').forEach(e=>e.textContent=s.fname);
 $('botst').innerHTML=!s.bot?'هنوز تنظیم نشده':(s.owner?'✅ وصل است و صاحبش ثبت شده':'⏳ توکن ذخیره شده — حالا در بات بنویس /pair '+s.pair);
 if(first){first=false;$('al').value=String(s.ah).padStart(2,'0')+':'+String(s.am).padStart(2,'0');$('aon').value=s.aon;D.forEach((d,i)=>$('d'+i).checked=!!(s.adays>>i&1));
-$('city').value=s.city;$('meet').value=s.meet;$('rem').value=s.rem;$('bapi').value=s.botApi;$('bm').value=s.bm;$('bd').value=s.bd;$('am').value=s.anm;$('ad').value=s.and;$('ssid').value=s.ssid}}catch(e){}}
+$('city').value=s.city;$('oname').value=s.oname;$('fname').value=s.fname;$('meet').value=s.meet;$('rem').value=s.rem;$('bapi').value=s.botApi;$('bm').value=s.bm;$('bd').value=s.bd;$('am').value=s.anm;$('ad').value=s.and;$('ssid').value=s.ssid}}catch(e){}}
 load();setInterval(load,5000);
 // ---- نقاشی ۱۲۸×۴۸ ----
 const cv=$('cv'),cx=cv.getContext('2d');let dn=false,lp=null;
