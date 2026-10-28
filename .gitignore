@@ -1,0 +1,17 @@
+# PlatformIO
+.pio/
+.vscode/
+# secrets — never commit
+src/secrets.h
+secrets.ini
+# local only
+backup/
+tools/voice_cache/
+tools/voice/
+__pycache__/
+*.pyc
+voice-sample.wav
+# personal names (generated with tools/names.json)
+tools/names.json
+src/*_personal.h
+tools/voice_cache_example/

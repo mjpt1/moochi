@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>نقاشی برای موچی</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;800&family=Lalezar&display=swap">
+<style>
+/* Layout: one column — the robot's screen as the hero you draw on, tools under it, the message for Bale at the end */
+:root{
+  --bg:#fbf4f6; --panel:#ffffff; --ink:#33212b; --mut:#7d6672; --line:#ecd6df;
+  --accent:#d9467d; --accent-ink:#ffffff; --bezel:#2b2228; --pix:#e9f6ff; --glass:#05080a;
+  --display:"Lalezar","Vazirmatn",Tahoma,sans-serif; --body:"Vazirmatn",Tahoma,sans-serif;
+  --mono:ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#181216; --panel:#221a1f; --ink:#f5e8ee; --mut:#b39aa7; --line:#3a2c34;
+  --accent:#ff6d9f; --accent-ink:#1c1016; --bezel:#0e0b0d; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#181216; --panel:#221a1f; --ink:#f5e8ee; --mut:#b39aa7; --line:#3a2c34;
+  --accent:#ff6d9f; --accent-ink:#1c1016; --bezel:#0e0b0d; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.8 var(--body);margin:0}
+.wrap{max-width:620px;margin:0 auto;padding-inline:16px;padding-block:20px 40px;display:grid;gap:18px}
+h1{font:400 34px/1.2 var(--display);margin:0;color:var(--accent);text-wrap:balance}
+.lead{margin:2px 0 0;color:var(--mut)}
+.device{background:var(--bezel);border-radius:22px;padding:14px;box-shadow:0 10px 30px -14px rgba(60,10,30,.45)}
+.screen{background:var(--glass);border-radius:8px;padding:6px;display:grid;gap:4px}
+.bar{height:auto;aspect-ratio:128/16;max-width:100%;display:block;width:100%;image-rendering:pixelated}
+#cv{width:100%;max-width:100%;aspect-ratio:128/48;display:block;image-rendering:pixelated;touch-action:none;cursor:crosshair;border-radius:2px;outline:1px dashed rgba(233,246,255,.18)}
+.cap{color:#8f7f88;font-size:12px;text-align:center;margin-top:8px;letter-spacing:.02em}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel)}
+.seg button{border:0;background:transparent;color:var(--ink);font:600 14px var(--body);padding:8px 12px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);font:600 14px var(--body);padding:8px 12px;border-radius:12px;cursor:pointer}
+.btn:hover,.seg button:hover{border-color:var(--accent)}
+button:focus-visible,label:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.file{position:relative;overflow:hidden}
+.file input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.send{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;display:grid;gap:10px}
+.send h2{font:400 22px/1.3 var(--display);margin:0}
+.send ol{margin:0;padding-inline-start:20px;color:var(--mut)}
+.primary{background:var(--accent);color:var(--accent-ink);border:0;font:800 16px var(--body);padding:12px 16px;border-radius:14px;cursor:pointer}
+textarea{width:100%;min-height:76px;font:12px/1.4 var(--mono);direction:ltr;background:var(--bg);color:var(--mut);border:1px solid var(--line);border-radius:10px;padding:8px;resize:vertical;word-break:break-all}
+.hint{color:var(--mut);font-size:13px;margin:0}
+#toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 18px;border-radius:20px;opacity:0;transition:opacity .25s;pointer-events:none}
+@media (prefers-reduced-motion:reduce){#toast{transition:none}}
+</style></head><body>
+
+<div class="wrap" dir="rtl" lang="fa">
+  <header>
+    <h1>نقاشی برای موچی</h1>
+    <p class="lead">روی صفحه‌ی موچی بکش، بعد متنش رو کپی کن و توی بات بله بفرست. روی ربات دقیقا همین دیده می‌شه.</p>
+  </header>
+
+  <div class="device">
+    <div class="screen">
+      <canvas class="bar" id="bar" width="128" height="16" aria-hidden="true"></canvas>
+      <canvas id="cv" width="128" height="48" aria-label="صفحه‌ی نقاشی ۱۲۸ در ۴۸ پیکسل"></canvas>
+    </div>
+    <div class="cap">صفحه‌ی موچی · ۱۲۸×۴۸ پیکسل، تک‌رنگ</div>
+  </div>
+
+  <div class="tools" role="toolbar" aria-label="ابزارها">
+    <div class="seg" id="mode">
+      <button id="m-pen" aria-pressed="true">قلم</button>
+      <button id="m-er" aria-pressed="false">پاک‌کن</button>
+      <button id="m-heart" aria-pressed="false">مهر قلب</button>
+    </div>
+    <div class="seg" id="size">
+      <button data-s="1" aria-pressed="false">نازک</button>
+      <button data-s="2" aria-pressed="true">متوسط</button>
+      <button data-s="4" aria-pressed="false">کلفت</button>
+    </div>
+    <button class="btn" id="undo">برگرد</button>
+    <button class="btn" id="clear">پاک کردن همه</button>
+    <label class="btn file">عکس → نقاشی<input type="file" id="img" accept="image/*"></label>
+  </div>
+
+  <section class="send">
+    <h2>فرستادن با بات</h2>
+    <ol>
+      <li>دکمه‌ی زیر رو بزن تا متن نقاشی کپی بشه.</li>
+      <li>توی چت بات موچی در بله بچسبون و بفرست.</li>
+    </ol>
+    <button class="primary" id="copy">کپی متن نقاشی</button>
+    <textarea id="out" readonly aria-label="متن نقاشی برای فرستادن"></textarea>
+    <p class="hint">اگر کپی نشد، روی متن بالا بزن، همه‌اش رو انتخاب کن و کپی کن. متن با <span dir="ltr">DOODLE:</span> شروع می‌شه.</p>
+  </section>
+</div>
+<div id="toast" role="status"></div>
+
+<script>
+const W=128,H=48,PIX='#e9f6ff';
+const cv=document.getElementById('cv'),cx=cv.getContext('2d');
+let bits=new Uint8Array(W*H),hist=[],mode='pen',size=2,down=false,last=null;
+const $=id=>document.getElementById(id);
+
+// --- sample doodle so the page opens with something on the screen ---
+function heart(px,py,s,v=1){for(let y=-s;y<=s;y++)for(let x=-s*1.2;x<=s*1.2;x++){const X=x/s,Y=-y/s+.25;if((X*X+Y*Y-1)**3-X*X*Y*Y*Y<=0)set(Math.round(px+x),Math.round(py+y),v)}}
+function set(x,y,v){if(x>=0&&y>=0&&x<W&&y<H)bits[y*W+x]=v}
+function sample(){bits.fill(0);heart(30,24,13);heart(98,24,13);for(let x=48;x<=80;x++){const y=Math.round(34-Math.sin((x-48)/32*Math.PI)*6);set(x,y,1);set(x,y+1,1)}}
+
+function draw(){
+  const im=cx.createImageData(W,H);
+  for(let i=0;i<W*H;i++){const o=i*4,on=bits[i];im.data[o]=on?233:5;im.data[o+1]=on?246:8;im.data[o+2]=on?255:10;im.data[o+3]=255}
+  cx.putImageData(im,0,0);$('out').value=encode();
+}
+function drawBar(){ // what Moochi shows above a drawing: envelope and two blinking hearts
+  const b=$('bar').getContext('2d');b.fillStyle='#05080a';b.fillRect(0,0,128,16);b.fillStyle=PIX;
+  b.strokeStyle=PIX;b.lineWidth=1;b.strokeRect(56.5,1.5,15,10);b.beginPath();b.moveTo(57,2);b.lineTo(64,8);b.lineTo(71,2);b.stroke();
+  [[40,7],[88,7]].forEach(([x,y])=>{b.beginPath();b.arc(x-2,y-1,2.2,0,7);b.arc(x+2,y-1,2.2,0,7);b.fill();b.beginPath();b.moveTo(x-4,y);b.lineTo(x,y+4);b.lineTo(x+4,y);b.fill()})
+}
+function encode(){
+  const out=new Uint8Array(768);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(bits[y*W+x])out[y*16+(x>>3)]|=1<<(x&7);
+  let s='';out.forEach(c=>s+=String.fromCharCode(c));return 'DOODLE:'+btoa(s);
+}
+function pos(e){const r=cv.getBoundingClientRect(),t=e.touches?e.touches[0]:e;return[(t.clientX-r.left)*W/r.width,(t.clientY-r.top)*H/r.height]}
+function stamp(x,y){const v=mode==='er'?0:1,s=mode==='er'?size+2:size,h=Math.floor(s/2);for(let j=0;j<s;j++)for(let i=0;i<s;i++)set(Math.round(x)-h+i,Math.round(y)-h+j,v)}
+function push(){hist.push(bits.slice());if(hist.length>30)hist.shift()}
+function start(e){e.preventDefault();push();const p=pos(e);
+  if(mode==='heart'){heart(p[0],p[1],3+size*2);draw();return}
+  down=true;last=p;stamp(...p);draw()}
+function move(e){if(!down)return;e.preventDefault();const p=pos(e),d=Math.max(Math.abs(p[0]-last[0]),Math.abs(p[1]-last[1]),1);
+  for(let i=1;i<=d;i++)stamp(last[0]+(p[0]-last[0])*i/d,last[1]+(p[1]-last[1])*i/d);last=p;draw()}
+function end(){down=false;last=null}
+cv.addEventListener('mousedown',start);cv.addEventListener('touchstart',start,{passive:false});
+addEventListener('mousemove',move);cv.addEventListener('touchmove',move,{passive:false});
+addEventListener('mouseup',end);addEventListener('touchend',end);
+
+function pick(group,btn){group.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b===btn))}
+$('m-pen').onclick=e=>{mode='pen';pick($('mode'),e.target)};
+$('m-er').onclick=e=>{mode='er';pick($('mode'),e.target)};
+$('m-heart').onclick=e=>{mode='heart';pick($('mode'),e.target)};
+$('size').querySelectorAll('button').forEach(b=>b.onclick=()=>{size=+b.dataset.s;pick($('size'),b)});
+$('undo').onclick=()=>{if(hist.length){bits=hist.pop();draw()}};
+$('clear').onclick=()=>{push();bits.fill(0);draw()};
+
+// photo -> 1-bit (Floyd–Steinberg)
+$('img').onchange=e=>{const f=e.target.files[0];if(!f)return;const im=new Image();
+  im.onload=()=>{const c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
+    g.fillStyle='#000';g.fillRect(0,0,W,H);const k=Math.min(W/im.width,H/im.height),w=im.width*k,h=im.height*k;
+    g.drawImage(im,(W-w)/2,(H-h)/2,w,h);const d=g.getImageData(0,0,W,H).data,L=new Float32Array(W*H);
+    for(let i=0;i<W*H;i++)L[i]=(d[i*4]*.3+d[i*4+1]*.59+d[i*4+2]*.11);
+    push();for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=y*W+x,o=L[i]>127?255:0,er=L[i]-o;bits[i]=o?1:0;
+      if(x+1<W)L[i+1]+=er*7/16;if(y+1<H){if(x>0)L[i+W-1]+=er*3/16;L[i+W]+=er*5/16;if(x+1<W)L[i+W+1]+=er/16}}
+    draw();URL.revokeObjectURL(im.src);toast('عکس تبدیل شد')};
+  im.src=URL.createObjectURL(f);e.target.value=''};
+
+function toast(t){const el=$('toast');el.textContent=t;el.style.opacity=1;clearTimeout(toast.t);toast.t=setTimeout(()=>el.style.opacity=0,1800)}
+$('copy').onclick=()=>{const t=encode();
+  navigator.clipboard.writeText(t).then(()=>toast('کپی شد — حالا توی بات بچسبون'),()=>{const o=$('out');o.focus();o.select();toast('متن انتخاب شد — کپی کن')})};
+$('out').onclick=e=>e.target.select();
+
+sample();drawBar();draw();
+</script>
+
+</body></html>
