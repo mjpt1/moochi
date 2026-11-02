@@ -22,6 +22,10 @@ Moochi is a palm-sized desk companion, made as a gift for someone special. It ha
 
 Every pin and behaviour knob is in [`src/config.h`](src/config.h).
 
+Wiring diagram, perfboard layout and pin table: [`docs/wiring.html`](docs/wiring.html) (open it in a browser).
+
+![Wiring](docs/wiring.png)
+
 ## Build and upload
 
 1. Install VS Code with the PlatformIO extension.
